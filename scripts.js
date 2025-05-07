@@ -1,85 +1,132 @@
 document.addEventListener('DOMContentLoaded', function() {
-    let cartCount = 0;
+    let cart = JSON.parse(localStorage.getItem('cart')) || [];
     const cartCountElement = document.querySelector('.cart-count');
-    
-    document.querySelectorAll('.btn-primary').forEach(button => {
-        if (button.textContent.includes('Add to Cart')) {
-            button.addEventListener('click', function() {
-                cartCount++;
-                cartCountElement.textContent = cartCount;
-                const originalText = this.textContent;
-                this.textContent = 'Added!';
-                this.classList.add('btn-success');
-                this.classList.remove('btn-primary');
-                
-                setTimeout(() => {
-                    this.textContent = originalText;
-                    this.classList.remove('btn-success');
-                    this.classList.add('btn-primary');
-                }, 1500);
-            });
+    const cartItemsList = document.getElementById('cartItemsList');
+    const orderForm = document.getElementById('orderForm');
+
+    function updateCart() {
+        cartCountElement.textContent = cart.length;
+        localStorage.setItem('cart', JSON.stringify(cart));
+        renderCartItems();
+        renderCartModal();
+    }
+
+    function renderCartItems() {
+        cartItemsList.innerHTML = '';
+        if (cart.length === 0) {
+            cartItemsList.innerHTML = '<p>No items in cart</p>';
+            return;
+        }
+
+        const ul = document.createElement('ul');
+        ul.className = 'list-group';
+
+        cart.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item d-flex justify-content-between align-items-center';
+            li.innerHTML = `
+                ${item.name}
+                <span class="badge bg-primary rounded-pill">${item.price} Rs</span>
+            `;
+            ul.appendChild(li);
+        });
+
+        const total = cart.reduce((sum, item) => sum + parseInt(item.price), 0);
+        const totalLi = document.createElement('li');
+        totalLi.className = 'list-group-item d-flex justify-content-between align-items-center fw-bold';
+        totalLi.innerHTML = `Total <span class="badge bg-success rounded-pill">${total} Rs</span>`;
+        ul.appendChild(totalLi);
+
+        cartItemsList.appendChild(ul);
+    }
+
+    function renderCartModal() {
+        const cartItems = document.getElementById('cartItems');
+        const cartTotal = document.getElementById('cartTotal');
+
+        cartItems.innerHTML = '';
+
+        if (cart.length === 0) {
+            cartItems.innerHTML = '<tr><td colspan="3" class="text-center">Your cart is empty</td></tr>';
+            cartTotal.textContent = '0 Rs';
+            return;
+        }
+
+        let total = 0;
+
+        cart.forEach((item, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.name}</td>
+                <td>${item.price} Rs</td>
+                <td>
+                    <button class="btn btn-sm btn-danger remove-item" data-index="${index}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            cartItems.appendChild(row);
+            total += parseInt(item.price);
+        });
+
+        cartTotal.textContent = `${total} Rs`;
+    }
+
+    document.querySelectorAll('.add-to-cart').forEach(button => {
+        button.addEventListener('click', function() {
+            const name = this.getAttribute('data-name');
+            const price = this.getAttribute('data-price');
+            
+            cart.push({ name, price });
+            updateCart();
+            
+            const originalText = this.textContent;
+            this.textContent = 'Added!';
+            this.classList.add('btn-success');
+            this.classList.remove('btn-primary');
+            
+            setTimeout(() => {
+                this.textContent = originalText;
+                this.classList.remove('btn-success');
+                this.classList.add('btn-primary');
+            }, 1500);
+        });
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-item') || e.target.closest('.remove-item')) {
+            const button = e.target.classList.contains('remove-item') ? e.target : e.target.closest('.remove-item');
+            const index = button.getAttribute('data-index');
+            cart.splice(index, 1);
+            updateCart();
         }
     });
 
-    const modalRating = document.getElementById('modalRating');
-    modalRating.querySelectorAll('i').forEach(star => {
-        star.addEventListener('click', function() {
-            const rating = this.getAttribute('data-rating');
-            const stars = modalRating.querySelectorAll('i');
-            
-            stars.forEach((s, index) => {
-                if (index < rating) {
-                    s.classList.remove('far');
-                    s.classList.add('fas');
-                } else {
-                    s.classList.remove('fas');
-                    s.classList.add('far');
-                }
-            });
-        });
-    });
-    
-    document.getElementById('submitReview').addEventListener('click', function() {
-        const product = document.getElementById('reviewProduct').value;
-        const title = document.getElementById('reviewTitle').value;
-        const reviewText = document.getElementById('reviewText').value;
-        const reviewerName = document.getElementById('reviewerName').value;
-        const stars = modalRating.querySelectorAll('.fas').length;
-        
-        if (!product || !title || !reviewText || !reviewerName || stars === 0) {
-            alert("Please fill all fields");
+    orderForm.addEventListener('submit', function(e) {
+        if (cart.length === 0) {
+            e.preventDefault();
+            alert('Your cart is empty. Please add items before placing an order.');
             return;
         }
         
-        const reviewCard = `
-            <div class="col-md-4 mb-4">
-                <div class="review-card">
-                    <div class="rating mb-3">
-                        ${'<i class="fas fa-star"></i>'.repeat(stars)}
-                        ${'<i class="far fa-star"></i>'.repeat(5 - stars)}
-                        <small class="text-muted ms-2">(${product})</small>
-                    </div>
-                    <h5>${title}</h5>
-                    <p class="mb-4">"${reviewText}"</p>
-                    <div class="d-flex align-items-center">
-                        <div>
-                            <h6 class="mb-0">${reviewerName}</h6>
-                            <small class="text-muted">Verified Buyer</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        document.getElementById('reviewsContainer').insertAdjacentHTML('afterbegin', reviewCard);
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('reviewModal'));
-        modal.hide();
-        
-        document.getElementById('reviewForm').reset();
-        modalRating.querySelectorAll('i').forEach(star => {
-            star.classList.remove('fas');
-            star.classList.add('far');
+        cart.forEach((item, index) => {
+            const inputName = document.createElement('input');
+            inputName.type = 'hidden';
+            inputName.name = `products[${index}][name]`;
+            inputName.value = item.name;
+            orderForm.appendChild(inputName);
+            
+            const inputPrice = document.createElement('input');
+            inputPrice.type = 'hidden';
+            inputPrice.name = `products[${index}][price]`;
+            inputPrice.value = item.price;
+            orderForm.appendChild(inputPrice);
         });
+        
+        localStorage.removeItem('cart');
+        cart = [];
+        updateCart();
     });
+
+    updateCart();
 });
